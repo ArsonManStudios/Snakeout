@@ -1,4 +1,6 @@
 import pygame
+from DATA.SCRIPTS.Player import*
+from DATA.SCRIPTS.Bullet import*
 
 # Color Constants
 BLACK = (20, 20, 20)
@@ -8,6 +10,7 @@ GREEN = (92, 219, 126)
 DGREEN = (37, 156, 69)
 BLUE = (111, 178, 214)
 WHITE = (245, 245, 245)
+RED = (227, 82, 82)
 
 # Initaization
 pygame.init()
@@ -21,99 +24,65 @@ pygame.display.set_caption('Snakeout')
 h = screen.get_height()
 w = screen.get_width()
 
-#Bullet Class
 bullets = []
-class Bullet():
-    def __init__(self, speed, rect, pos):
-        self.rect = rect
-        self.speed = speed
-        self.vect = pygame.math.Vector2([pos[0]-rect.x, pos[1]-rect.y]).normalize() * self.speed
-
-    def move(self):
-        self.rect.center += self.vect
-
-    def draw(self):
-        pygame.draw.circle(screen, WHITE, self.rect.center, self.rect.w/2)
-
-# Player Class
-class Player():
-    def __init__(self, start_pos, nodes, length):
-        self.length = length
-        self.nodes = []
-        for i in range(nodes):
-            self.nodes.append(pygame.FRect([start_pos[0]-i*self.length, start_pos[1]], [15, 15]))
-    
-    def draw(self, node_color, segment_color):
-        for i in range(1, len(self.nodes)):
-            pygame.draw.line(screen, segment_color, self.nodes[i].center, self.nodes[i-1].center, 7)
-        for i in range(len(self.nodes)):
-            pygame.draw.circle(screen, node_color, self.nodes[i].center, self.nodes[i].w/2)
-    
-    def update(self, speed):
-        for i in range(1, len(self.nodes)):
-            vector = pygame.Vector2(self.nodes[i-1].centerx-self.nodes[i].centerx, self.nodes[i-1].centery-self.nodes[i].centery)
-            if self.length*1.1 >= int(vector.length()) >= self.length/1.1:
-                continue
-            if int(vector.length()) > self.length:
-                self.nodes[i].center += vector.normalize()*speed
-            elif int(vector.length()) < self.length:
-                self.nodes[i].center -= vector.normalize()*speed
-
+enemies = []
 player = Player([w/2, h/2], 7, 25)
-speed = 3
-dash_speed = speed*2
-slow_speed = speed/2
-rot_speed = 4
-player_move = pygame.Vector2(speed, 0)
-dash = False
-dash_delay = 3000
-next_dash = -3000
-dashing_delay = 500
-next_dashing = -500
 
 while run:
     keys = pygame.key.get_pressed()
+    mouse_but = pygame.mouse.get_pressed()
     curr_time = pygame.time.get_ticks()
+    mos = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
         if event.type == pygame.KEYDOWN:
-            if (event.key == pygame.K_UP or event.key == pygame.K_w) and next_dash+dash_delay <= curr_time and not dash:
-                dash = True
-                next_dash = curr_time
-                next_dashing = curr_time
+            if (event.key == pygame.K_UP or event.key == pygame.K_w) and player.next_dash+player.dash_delay <= curr_time and not player.dash:
+                player.dash = True
+                player.next_dash = curr_time
+                player.next_dashing = curr_time
 
-    speed = 3
-    dash_speed = speed*2
-    slow_speed = speed/2
-    if dash and next_dashing+dashing_delay > curr_time:
-        speed = dash_speed
+    player.curr_speed = player.speed
+    if player.dash and player.next_dashing+player.dashing_delay > curr_time:
+        player.curr_speed = player.dash_speed
     else:
-        dash = False
+        player.dash = False
+    
+    if mouse_but[0]:
+        if player.next_fire+player.fire_rate <= curr_time:
+            bullets.append(Bullet(player.bullet_speed, pygame.FRect(player.nodes[0].center, (10, 10)), mos))
+            player.next_fire = curr_time
 
     if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-        player_move.rotate_ip(rot_speed)
+        player.vect.rotate_ip(player.rot_speed)
     if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-        player_move.rotate_ip(-rot_speed)
-    if keys[pygame.K_DOWN] or keys[pygame.K_s] and not dash:
-        speed = slow_speed
+        player.vect.rotate_ip(-player.rot_speed)
+    if keys[pygame.K_DOWN] or keys[pygame.K_s] and not player.dash:
+        player.curr_speed = player.slow_speed
 
     if player.nodes[0].right >= w or player.nodes[0].left <= 0:
-        player_move.x *= -1
+        player.vect.x *= -1
     if player.nodes[0].top <= 100 or player.nodes[0].bottom >= h:
-        player_move.y *= -1
+        player.vect.y *= -1
 
-    if player_move.length() != 0:
-        player_move = player_move.normalize()*speed
-    player.nodes[0].center += player_move
+    if player.vect.length() != 0:
+        player.vect = player.vect.normalize()*player.curr_speed
+    player.nodes[0].center += player.vect
 
     screen.fill(BLACK)
-    player.draw(DGREEN, GREEN)
-    player.update(speed)
+    player.draw(screen, DGREEN, GREEN)
+    player.update()
+
+    for bullet in bullets:
+        bullet.move()
+        bullet.draw(screen, WHITE)
+        if not bullet.rect.colliderect(pygame.FRect(0, 100, w, h-100)):
+            bullets.remove(bullet)
+
     pygame.draw.rect(screen, BROWN2, pygame.FRect(0, 0, w, 100))
     pygame.draw.rect(screen, BROWN, pygame.FRect(0, 0, w, 100), 5)
-    pygame.draw.rect(screen, BLUE, pygame.FRect(15, 15, 200*max(0,min(1,(curr_time-next_dash)/dash_delay)), 70))
+    pygame.draw.rect(screen, BLUE, pygame.FRect(15, 15, 200*max(0,min(1,(curr_time-player.next_dash)/player.dash_delay)), 70))
     pygame.draw.rect(screen, BLACK, pygame.FRect(15, 15, 200, 70), 5)
 
     pygame.display.flip()
